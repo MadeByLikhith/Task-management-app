@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Task Management App</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#1f2937}
+.container{max-width:1000px;margin:0 auto;padding:20px}
+.card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+h1,h2{margin-top:0} input,select,button{width:100%;padding:12px;margin:8px 0;border-radius:10px;border:1px solid #d1d5db;font-size:14px}
+button{background:#2563eb;color:#fff;border:none;cursor:pointer;font-weight:bold}
+button:hover{background:#1d4ed8}.secondary{background:#6b7280}.danger{background:#dc2626}.success{background:#16a34a}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.task{border:1px solid #e5e7eb;padding:16px;border-radius:12px;margin-bottom:12px;animation:fadeIn .25s ease}
+.task.completed{background:#ecfdf5;border-color:#86efac}.task h3{margin:0 0 8px}.task small{color:#6b7280}
+.actions{display:flex;gap:8px;margin-top:12px}.actions button{width:auto;flex:1}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.hidden{display:none}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.stat{background:#eff6ff;padding:16px;border-radius:12px;text-align:center}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media (max-width:700px){.row,.stats{grid-template-columns:1fr}.topbar{flex-direction:column;gap:10px;align-items:stretch}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="authCard" class="card">
+    <h1>🔐 Task Manager</h1>
+    <p>Create an account or log in to manage your tasks.</p>
+    <input id="username" placeholder="Username" />
+    <input id="password" type="password" placeholder="Password" />
+    <div class="row">
+      <button onclick="register()">Register</button>
+      <button class="secondary" onclick="login()">Login</button>
+    </div>
+    <p id="authMsg"></p>
+  </div>
+
+  <div id="appCard" class="hidden">
+    <div class="topbar">
+      <h1>📋 My Tasks</h1>
+      <button class="danger" style="max-width:180px" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><strong id="totalCount">0</strong><br>Total</div>
+      <div class="stat"><strong id="pendingCount">0</strong><br>Pending</div>
+      <div class="stat"><strong id="completedCount">0</strong><br>Completed</div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px; padding:16px;">
+      <h2>Add / Edit Task</h2>
+      <input id="taskTitle" placeholder="Task Title" />
+      <input id="taskDesc" placeholder="Task Description" />
+      <select id="taskStatus">
+        <option value="Pending">Pending</option>
+        <option value="Completed">Completed</option>
+      </select>
+      <button onclick="saveTask()">Save Task</button>
+    </div>
+
+    <div class="card" style="padding:16px;">
+      <h2>Task List</h2>
+      <input id="search" placeholder="Search tasks..." oninput="renderTasks()" />
+      <div id="taskList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentUser = localStorage.getItem('currentUser');
+let editId = null;
+
+function getUsers(){ return JSON.parse(localStorage.getItem('users') || '{}'); }
+function saveUsers(users){ localStorage.setItem('users', JSON.stringify(users)); }
+function getTasks(){ return currentUser ? JSON.parse(localStorage.getItem('tasks_' + currentUser) || '[]') : []; }
+function saveTasks(tasks){ localStorage.setItem('tasks_' + currentUser, JSON.stringify(tasks)); }
+
+function showMessage(msg, color='red'){
+  const el = document.getElementById('authMsg');
+  el.textContent = msg;
+  el.style.color = color;
+}
+
+function register(){
+  const u = username.value.trim();
+  const p = password.value.trim();
+  if(!u || !p) return showMessage('Enter username and password');
+  const users = getUsers();
+  if(users[u]) return showMessage('User already exists');
+  users[u] = p;
+  saveUsers(users);
+  showMessage('Registered successfully! Please login.', 'green');
+}
+
+function login(){
+  const u = username.value.trim();
+  const p = password.value.trim();
+  const users = getUsers();
+  if(users[u] !== p) return showMessage('Invalid credentials');
+  currentUser = u;
+  localStorage.setItem('currentUser', u);
+  initApp();
+}
+
+function logout(){
+  localStorage.removeItem('currentUser');
+  location.reload();
+}
+
+function saveTask(){
+  const title = taskTitle.value.trim();
+  const desc = taskDesc.value.trim();
+  const status = taskStatus.value;
+  if(!title) return alert('Task title is required');
+
+  const tasks = getTasks();
+  if(editId){
+    const task = tasks.find(t => t.id === editId);
+    task.title = title;
+    task.desc = desc;
+    task.status = status;
+    editId = null;
+  } else {
+    tasks.unshift({
+      id: Date.now().toString(),
+      title, desc, status,
+      created: new Date().toLocaleString()
+    });
+  }
+
+  saveTasks(tasks);
+  taskTitle.value = '';
+  taskDesc.value = '';
+  taskStatus.value = 'Pending';
+  renderTasks();
+}
+
+function editTask(id){
+  const task = getTasks().find(t => t.id === id);
+  if(!task) return;
+  taskTitle.value = task.title;
+  taskDesc.value = task.desc;
+  taskStatus.value = task.status;
+  editId = id;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function deleteTask(id){
+  if(!confirm('Delete this task?')) return;
+  saveTasks(getTasks().filter(t => t.id !== id));
+  renderTasks();
+}
+
+function toggleTask(id){
+  const tasks = getTasks();
+  const task = tasks.find(t => t.id === id);
+  task.status = task.status === 'Completed' ? 'Pending' : 'Completed';
+  saveTasks(tasks);
+  renderTasks();
+}
+
+function renderTasks(){
+  const q = (search.value || '').toLowerCase();
+  const tasks = getTasks().filter(t =>
+    t.title.toLowerCase().includes(q) ||
+    (t.desc || '').toLowerCase().includes(q)
+  );
+
+  taskList.innerHTML = tasks.length ? '' : '<p>No tasks found.</p>';
+
+  tasks.forEach(task => {
+    const div = document.createElement('div');
+    div.className = 'task ' + (task.status === 'Completed' ? 'completed' : '');
+    div.innerHTML = `
+      <h3>${task.title}</h3>
+      <p>${task.desc || ''}</p>
+      <small>Status: ${task.status} • ${task.created}</small>
+      <div class="actions">
+        <button class="success" onclick="toggleTask('${task.id}')">Toggle</button>
+        <button class="secondary" onclick="editTask('${task.id}')">Edit</button>
+        <button class="danger" onclick="deleteTask('${task.id}')">Delete</button>
+      </div>`;
+    taskList.appendChild(div);
+  });
+
+  const all = getTasks();
+  totalCount.textContent = all.length;
+  pendingCount.textContent = all.filter(t => t.status === 'Pending').length;
+  completedCount.textContent = all.filter(t => t.status === 'Completed').length;
+}
+
+function initApp(){
+  authCard.classList.add('hidden');
+  appCard.classList.remove('hidden');
+  renderTasks();
+}
+
+if(currentUser) initApp();
+</script>
+</body>
+</html>
